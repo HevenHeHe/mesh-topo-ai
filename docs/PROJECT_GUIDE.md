@@ -378,6 +378,73 @@ mesh-topo-ai/
 
 ---
 
+## 四、补充章：工程风险与防御性设计
+
+> ⚠️ **本章节是对 Phase 2 实现的深度工程审查结果，标识出了 4 个严重风险并提供了对应的防御性方案。**
+> 
+> 完整详细文档见: `docs/RISK_ASSESSMENT.md`
+
+### 4.1 风险盘点概览
+
+| 编号 | 风险 | 等级 | 相关模块 | 防御措施 |
+|------|------|------|----------|----------|
+| RISK-1 | GNN Patch 局部重建时的"拓扑失忆"（微裂缝） | 🔴 CRITICAL | VQ-VAE Decoder | Topology Consistency Loss |
+| RISK-2 | Fusion 360 数据集的"无 UV 危机"（UV 碎屑） | 🔴 CRITICAL | 数据管道 | UV Patch Density Kill Switch |
+| RISK-3 | 自回归 Transformer 的"维数灾难与死锁" | 🟠 HIGH | Transformer | 层次化生成 + 边界条件化 |
+| RISK-4 | Blender 插件的"IO 死锁" | 🟡 MEDIUM | Blender 插件 | 点云特征替代高模导出 |
+
+### 4.2 防御性设计接口
+
+以下防御措施已在代码库中提供接口：
+
+1. **Topology Consistency Loss** (`tokenizer/vqvae_tokenizer.py`)
+   - 计算相邻面共享顶点的重建坐标偏离
+   - 训练时结入总损失: `L_total = L_recon + β·L_commitment + λ_topo·L_topo`
+   - 预期效果: 共享顶点偏离 < 1e-6，无物理裂缝
+
+2. **UV Density Kill Switch** (`tokenizer/scripts/batch_preprocess.py`)
+   - 指标: `Density = 总面数 / UV Patches 数量`
+   - 策略: Density < 20 → 直接丢弃
+   - 同时检查: patches/mesh < 50（避免超出 transformer 上下文）
+
+3. **拓扑升维焊接** (`tokenizer/mesh_assembler.py`)
+   - 用 `global_vertex_remap` 作为主要焊接准则
+   - 几何距离仅作为 fallback
+   - 预期效果: 焊接成功率提升一个数量级
+
+4. **点云特征替代方案** (待 Phase 4 实现)
+   - 不发送完整高模 OBJ，只发送 PointNet++ 编码后的特征向量
+   - 传输体积从 > 100MB 降至 < 1MB
+   - Blender UI 无阻塞感
+
+### 4.3 防御路线图
+
+```
+Phase 2 后半 数据验收
+    │
+    ├── [熔断] UV Patch Density < 20 → 丢弃
+    └── [通过] 进入训练
+            │
+            ▼
+Phase 3 VQ-VAE 训练
+    │
+    ├── [损失函数] L = L_recon + L_commitment + L_topo
+    └── [验证] 共享顶点偏离 < 1e-6
+            │
+            ▼
+Phase 3 Transformer 训练
+    │
+    ├── [边界条件化] Boundary conditioning
+    └── [层次生成] Hierarchical generation
+            │
+            ▼
+Phase 4 工程集成
+    │
+    └── [点云特征] 替代高模导出
+```
+
+---
+
 ## 五、后续计划
 
 ### Phase 2 后半（本周）

@@ -250,3 +250,77 @@ class FaceClusterVQVAE:
             "n_faces": len(faces),
             "n_tokens": len(quantized.code_indices),
         }
+
+    def compute_topology_consistency_loss(
+        self,
+        patch: MeshPatch,
+        quantized: QuantizedPatch,
+    ) -> float:
+        """
+        DEFENSE #1: Topology Consistency Loss
+        =====================================
+        Penalize cases where shared vertices in adjacent faces diverge
+        after reconstruction. This prevents micro-cracks (cracks < 1e-5)
+        that would cause Mesh Assembler to fail.
+        
+        For each pair of adjacent faces sharing an edge, compute the
+        L2 distance between the reconstructed coordinates of shared
+        vertices. Sum and average.
+        
+        In Phase 3 (training), this loss is added to the total:
+            L_total = L_recon + beta * L_commitment + lambda_topo * L_topo
+        
+        Args:
+            patch: Original MeshPatch with face topology.
+            quantized: QuantizedPatch with reconstructed corners.
+        
+        Returns:
+            float: Average shared-vertex position divergence.
+        """
+        faces = patch.local_faces
+        recon = quantized.reconstructed_corners  # (F, 3, 3)
+        n_faces = len(faces)
+        
+        if n_faces < 2:
+            return 0.0  # No adjacent faces to constrain
+        
+        # Build edge -> face mapping for LOCAL faces
+        edge_to_faces_local = {}
+        for f_idx in range(n_faces):
+            face = faces[f_idx]
+            for i in range(3):
+                v0 = int(face[i])
+                v1 = int(face[(i + 1) % 3])
+                edge = (v0, v1) if v0 < v1 else (v1, v0)
+                edge_to_faces_local.setdefault(edge, []).append(f_idx)
+        
+        total_divergence = 0.0
+        pair_count = 0
+        
+        for edge, f_list in edge_to_faces_local.items():
+            if len(f_list) < 2:
+                continue
+            # For manifold mesh, each edge is shared by exactly 2 faces
+            # Non-manifold edges (>2 faces) are penalized pairwise
+            for i in range(len(f_list)):
+                for j in range(i + 1, len(f_list)):
+                    f_a, f_b = f_list[i], f_list[j]
+                    v_a, v_b = edge
+                    
+                    # Find which corner index corresponds to v_a and v_b
+                    # in each face
+                    corner_idx_a = [np.where(faces[f_a] == v)[0] for v in (v_a, v_b)]
+                    corner_idx_b = [np.where(faces[f_b] == v)[0] for v in (v_a, v_b)]
+                    
+                    # Compute divergence for both shared vertices
+                    for c_a, c_b in zip(corner_idx_a, corner_idx_b):
+                        if len(c_a) > 0 and len(c_b) > 0:
+                            pos_a = recon[f_a, c_a[0]]
+                            pos_b = recon[f_b, c_b[0]]
+                            total_divergence += np.linalg.norm(pos_a - pos_b) ** 2
+                            pair_count += 1
+        
+        if pair_count == 0:
+            return 0.0
+        
+        return float(total_divergence / pair_count)

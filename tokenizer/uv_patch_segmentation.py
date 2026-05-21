@@ -19,29 +19,59 @@ from .mesh_utils import build_edge_to_faces, build_face_adjacency, extract_conne
 class MeshPatch:
     """
     A single patch (UV island) extracted from a mesh.
+    
+    Supports two calling conventions:
+    1. Original (from uv_patch_segmentation): patch_id, global_faces, local_faces, local_vertices, local_uvs, global_vertex_remap, boundary_edges
+    2. Batch preprocess: mesh_index, patch_index, local_vertices, local_faces, face_uv_coords, face_segmentation_mask, global_vertex_remap
     """
     def __init__(
         self,
-        patch_id: int,
-        global_faces: np.ndarray,
-        local_faces: np.ndarray,
-        local_vertices: np.ndarray,
-        local_uvs: np.ndarray,
-        global_vertex_remap: np.ndarray,
-        boundary_edges: Set[Tuple[int, int]],
+        patch_id: int = None,
+        global_faces: np.ndarray = None,
+        local_faces: np.ndarray = None,
+        local_vertices: np.ndarray = None,
+        local_uvs: np.ndarray = None,
+        global_vertex_remap: np.ndarray = None,
+        boundary_edges: Set[Tuple[int, int]] = None,
+        # Alternative calling convention (batch_preprocess.py)
+        mesh_index: int = None,
+        patch_index: int = None,
+        face_uv_coords: np.ndarray = None,
+        face_segmentation_mask: np.ndarray = None,
     ):
-        self.patch_id = patch_id
-        self.global_faces = global_faces       # (F_p, 3) indices into original mesh
-        self.local_faces = local_faces         # (F_p, 3) indices into local_vertices
-        self.local_vertices = local_vertices   # (V_p, 3)
-        self.local_uvs = local_uvs             # (V_p, 2)
-        self.global_vertex_remap = global_vertex_remap  # (V_p,) maps local -> original vertex
-        self.boundary_edges = boundary_edges   # Set of (local_a, local_b) on seam boundary
+        # Normalize parameter names
+        if patch_index is not None:
+            self.patch_id = patch_index
+        elif patch_id is not None:
+            self.patch_id = patch_id
+        else:
+            self.patch_id = 0
+            
+        self.mesh_index = mesh_index if mesh_index is not None else 0
+        self.global_faces = global_faces
+        self.local_faces = local_faces
+        self.local_vertices = local_vertices
+        
+        # UVs: prefer local_uvs, fallback to face_uv_coords
+        if local_uvs is not None:
+            self.local_uvs = local_uvs
+        elif face_uv_coords is not None:
+            self.local_uvs = face_uv_coords
+        else:
+            self.local_uvs = None
+            
+        self.face_uv_coords = face_uv_coords
+        self.face_segmentation_mask = face_segmentation_mask
+        self.global_vertex_remap = global_vertex_remap
+        self.boundary_edges = boundary_edges if boundary_edges is not None else set()
 
     def __repr__(self):
+        face_count = len(self.local_faces) if self.local_faces is not None else 0
+        vert_count = len(self.local_vertices) if self.local_vertices is not None else 0
+        boundary_count = len(self.boundary_edges) if self.boundary_edges is not None else 0
         return (
-            f"MeshPatch(id={self.patch_id}, faces={len(self.local_faces)}, "
-            f"verts={len(self.local_vertices)}, boundary_edges={len(self.boundary_edges)})"
+            f"MeshPatch(id={self.patch_id}, faces={face_count}, "
+            f"verts={vert_count}, boundary_edges={boundary_count})"
         )
 
 

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Blender
+*.blend1
+*.blend2
+*.blend3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model weights / data
+*.onnx
+*.pt
+*.pth
+*.ckpt
+data/
+datasets/
+checkpoints/
+
+# Temp
+*.tmp
+*.log

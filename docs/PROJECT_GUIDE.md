@@ -565,6 +565,13 @@ Phase 4 工程集成
 - **xatlas**: https://github.com/jpcy/xatlas (UV 展开)
 - **trimesh**: https://trimesh.org/ (Mesh I/O)
 
+### 项目文档
+- `docs/PROJECT_GUIDE.md` — 项目总体指南
+- `docs/RISK_ASSESSMENT.md` — 风险盘点与防御性方案
+- `docs/PHASE3_IMPLEMENTATION_PLAN.md` — Phase 3 实施计划（Sprint 路线图）
+- `docs/research-report-phase1.md` — Phase 1 技术调研报告
+- `docs/data-pipeline-report-phase2.md` — Phase 2 数据管道报告
+
 ---
 
 *文档由 Hermes CTO 维护，随项目进展持续更新。*
